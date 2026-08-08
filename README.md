@@ -52,27 +52,6 @@ Pin numbering note: hold the plug clip-down, contacts toward you, pin 1 on the l
 
 Shifter `LV` ref ← ESP `3V3`.
 
-```
-                        ┌──────────────────────────────┐
-  desk cable            │   BSS138 level shifter       │           keypad cable
- ┌─────────┐            │  HV ── pin8 (+5V)            │          ┌─────────┐
- │ 8 +5V ──┼────────────┼──────────────────────────────┼──────────┼── 8     │
- │ 7 GND ──┼────────────┼──GND                LV ──3V3─┼──────────┼── 7     │
- │         │            │                              │          │         │
- │ 5 ──────┼───┬────────┼──────────────────────────────┼──────────┼── 5     │
- │         │   └─►HV2   │  LV2─►GPIO17 (uart_desk RX)  │          │         │
- │         │            │                              │          │         │
- │ 6 ◄─────┼──HV3       │  LV3◄─GPIO26 (uart_desk TX)  │   ┌──────┼── 6     │
- │      ×CUT×           │  LV1─►GPIO16 (uart_keypad RX)│ HV1◄─────┘         │
- │         │            │                              │          │         │
- │ 4 ◄─────┼──HV4       │  LV4◄─GPIO27 (PIN20 drive)   │   ┌──────┼── 4     │
- │      ×CUT×           └──────────────────────────────┘   │      │         │
- │         │                     GPIO34 ◄──[4.7k]──────────┤      │         │
- │ 1,2,3 ──┼───────────────────────────────[10k]           │      │         │
- └─────────┘         (straight through)      └───── GND    │      └─────────┘
-                                                     (divider on keypad side)
-```
-
 **Electrical notes**
 
 - ESP32 pins are **not 5 V tolerant** — nothing from the bus may touch a GPIO without the shifter or the divider.
