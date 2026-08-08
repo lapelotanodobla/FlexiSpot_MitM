@@ -25,8 +25,11 @@ wifi:
 captive_portal:
 
 # Both buses are RX-only taps. The ESP transmits nothing in Phase 1.
+# Direction labels verified empirically 2026-08-08: on this desk RJ45 pin 6
+# carries keypad->controller commands and pin 5 carries controller->keypad
+# display frames (opposite of the iMicknl HS01B-1 table's TX/RX naming).
 uart:
-  - id: uart_desk    # controller -> keypad line (RJ45 pin 6)
+  - id: uart_keypad  # keypad -> controller line (RJ45 pin 6)
     rx_pin: GPIO16
     baud_rate: 9600
     debug:
@@ -40,8 +43,8 @@ uart:
             char buf[4];
             for (auto b : bytes) { sprintf(buf, "%02X:", b); hex += buf; }
             if (!hex.empty()) hex.pop_back();
-            ESP_LOGD("DESK", "%s", hex.c_str());
-  - id: uart_keypad  # keypad -> controller line (RJ45 pin 5)
+            ESP_LOGD("KEYPAD", "%s", hex.c_str());
+  - id: uart_desk    # controller -> keypad line (RJ45 pin 5)
     rx_pin: GPIO17
     baud_rate: 9600
     debug:
@@ -55,7 +58,7 @@ uart:
             char buf[4];
             for (auto b : bytes) { sprintf(buf, "%02X:", b); hex += buf; }
             if (!hex.empty()) hex.pop_back();
-            ESP_LOGD("KEYPAD", "%s", hex.c_str());
+            ESP_LOGD("DESK", "%s", hex.c_str());
 
 binary_sensor:
   - platform: gpio
