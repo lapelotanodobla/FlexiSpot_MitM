@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
+#include <cmath>
 #include <vector>
 
 namespace desk_mitm {
@@ -65,5 +66,34 @@ class Parser {
   uint8_t len_{0};
   std::vector<uint8_t> buf_;
 };
+
+// 7-segment glyph -> digit value, ignoring the decimal-point bit (bit 7). -1 = not a digit.
+inline int seg_digit(uint8_t b) {
+  switch (b & 0x7F) {
+    case 0x3F: return 0; case 0x06: return 1; case 0x5B: return 2;
+    case 0x4F: return 3; case 0x66: return 4; case 0x6D: return 5;
+    case 0x7D: return 6; case 0x07: return 7; case 0x7F: return 8;
+    case 0x6F: return 9; default: return -1;
+  }
+}
+
+// Decode a type-12 payload (3 display bytes) to height. NAN when not numeric
+// (M-mode "S-" prompt, blanks). Middle-digit decimal point => XX.X, else XXX.
+inline float decode_height(const uint8_t *p) {
+  int d0 = seg_digit(p[0]), d1 = seg_digit(p[1]), d2 = seg_digit(p[2]);
+  if (d0 < 0 || d1 < 0 || d2 < 0) return NAN;
+  if (p[1] & 0x80) return d0 * 10.0f + d1 + d2 * 0.1f;
+  return d0 * 100.0f + d1 * 10.0f + d2 * 1.0f;
+}
+
+// Build a keypad type-02 reply frame for a key bitmask.
+inline std::vector<uint8_t> build_key_reply(uint8_t keys) {
+  std::vector<uint8_t> f = {0x9B, 0x06, 0x02, keys, 0x00};
+  uint16_t crc = crc16(f.data() + 1, 4);
+  f.push_back(crc >> 8);
+  f.push_back(crc & 0xFF);
+  f.push_back(0x9D);
+  return f;
+}
 
 }  // namespace desk_mitm

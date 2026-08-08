@@ -51,9 +51,36 @@ static void test_parser() {
   assert(f.raw.size() == 9 && f.raw[0] == 0x9B && f.raw[8] == 0x9D);
 }
 
+static void test_height() {
+  // Captured vectors: 07:EF:6D = "79.5", 07:ED:3F = "75.0"
+  const uint8_t h795[] = {0x07, 0xEF, 0x6D};
+  assert(std::fabs(decode_height(h795) - 79.5f) < 0.01f);
+  const uint8_t h750[] = {0x07, 0xED, 0x3F};
+  assert(std::fabs(decode_height(h750) - 75.0f) < 0.01f);
+  // 3-digit, no decimal point: 06:5B:06 = "121"
+  const uint8_t h121[] = {0x06, 0x5B, 0x06};
+  assert(std::fabs(decode_height(h121) - 121.0f) < 0.01f);
+  // M-mode prompt "S- " is not a height.
+  const uint8_t prompt[] = {0x6D, 0x40, 0x00};
+  assert(std::isnan(decode_height(prompt)));
+}
+
+static void test_build_reply() {
+  // Idle reply must byte-match the captured keypad frame.
+  auto idle = build_key_reply(0x00);
+  const uint8_t expect[] = {0x9B, 0x06, 0x02, 0x00, 0x00, 0x6C, 0xA1, 0x9D};
+  assert(idle.size() == 8);
+  for (int i = 0; i < 8; i++) assert(idle[i] == expect[i]);
+  // Up reply matches captured 9B:06:02:01:00:FC:A0:9D.
+  auto up = build_key_reply(0x01);
+  assert(up[3] == 0x01 && up[5] == 0xFC && up[6] == 0xA0);
+}
+
 int main() {
   test_crc16();
   test_parser();
+  test_height();
+  test_build_reply();
   printf("all tests passed\n");
   return 0;
 }
