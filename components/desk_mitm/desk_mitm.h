@@ -63,6 +63,9 @@ class DeskMitm : public esphome::Component {
   uint8_t pending_mask_{0};
   uint32_t pending_duration_{0};
   uint32_t wake_started_ms_{0};
+
+  uint8_t height_fetch_attempts_{0};
+  uint32_t last_height_fetch_ms_{0};
 };
 
 }  // namespace desk_mitm

@@ -50,6 +50,15 @@ void DeskMitm::loop() {
     pending_mask_ = 0;
     wake_request_ = false;
   }
+  // Boot height fetch can race the controller's own sleep transition; retry a
+  // bounded number of times until a height has ever been decoded.
+  if (std::isnan(height_) && !polling_ && !wake_request_ && height_fetch_attempts_ < 3 &&
+      now > 15000 && now - last_height_fetch_ms_ > 30000) {
+    height_fetch_attempts_++;
+    last_height_fetch_ms_ = now;
+    ESP_LOGI(TAG, "height unknown; retrying wake (attempt %u/3)", height_fetch_attempts_);
+    request_height();
+  }
   update_pin20_();
 }
 

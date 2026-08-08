@@ -117,3 +117,7 @@ button:
   - platform: template
     name: "Desk Preset 3"
     on_press: [lambda: 'id(mitm).inject(0x10, 150);']
+  - platform: template
+    name: "Refresh Height"
+    entity_category: diagnostic
+    on_press: [lambda: 'id(mitm).request_height();']
