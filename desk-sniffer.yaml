@@ -1,0 +1,67 @@
+esphome:
+  name: desk-sniffer
+  friendly_name: Flexispot Desk
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  use_address: 192.168.40.65
+  ap:
+    ssid: "Desk-Sniffer Fallback"
+
+captive_portal:
+
+# Both buses are RX-only taps. The ESP transmits nothing in Phase 1.
+uart:
+  - id: uart_desk    # controller -> keypad line (RJ45 pin 6)
+    rx_pin: GPIO16
+    baud_rate: 9600
+    debug:
+      direction: RX
+      dummy_receiver: true
+      after:
+        delimiter: [0x9D]
+      sequence:
+        - lambda: |-
+            std::string hex;
+            char buf[4];
+            for (auto b : bytes) { sprintf(buf, "%02X:", b); hex += buf; }
+            if (!hex.empty()) hex.pop_back();
+            ESP_LOGD("DESK", "%s", hex.c_str());
+  - id: uart_keypad  # keypad -> controller line (RJ45 pin 5)
+    rx_pin: GPIO17
+    baud_rate: 9600
+    debug:
+      direction: RX
+      dummy_receiver: true
+      after:
+        delimiter: [0x9D]
+      sequence:
+        - lambda: |-
+            std::string hex;
+            char buf[4];
+            for (auto b : bytes) { sprintf(buf, "%02X:", b); hex += buf; }
+            if (!hex.empty()) hex.pop_back();
+            ESP_LOGD("KEYPAD", "%s", hex.c_str());
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO34
+      mode:
+        input: true
+    name: "PIN 20"
+    id: pin20
