@@ -142,7 +142,17 @@ void DeskMitm::inject(uint8_t mask, uint32_t duration_ms) {
   wake_started_ms_ = now;
 }
 
-void DeskMitm::stop() { keys_.stop(); }
+void DeskMitm::stop() {
+  keys_.stop();
+  const uint32_t now = millis();
+  // Idle replies do not cancel a controller-autonomous (preset) move — but any
+  // brief key press does (verified on hardware). Tap "up" for ~2 polls: enough
+  // to cancel a move in flight, too short to visibly jog. Only when a move
+  // actually appears to be in flight, so Stop on an idle desk stays a no-op.
+  if (polling_ && now - last_height_change_ms_ < 500) {
+    keys_.inject(0x01, 60, now);
+  }
+}
 
 void DeskMitm::request_height() {
   if (polling_) return;  // controller awake: height frames already flowing
