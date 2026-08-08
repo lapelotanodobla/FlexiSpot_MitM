@@ -45,7 +45,15 @@ desk RJ45 ═══════════ 8 straight wires ══════�
 | 5 (keypad-TX) | GPIO17 | UART2 RX — keypad→controller traffic |
 | 4 (PIN 20) | GPIO34 | Digital input (input-only pin), edge logging |
 
-**Safety gate before connecting taps:** with keypad plugged straight into desk and no ESP attached, measure pins 6, 5, 4 vs pin 7 with a multimeter during idle and while pressing buttons. Any line that exceeds ~3.6 V gets a resistor divider (e.g. 10k/15k) on its tap; ESP32 GPIOs are not 5 V tolerant. (Reports say these boxes use 3.3 V logic, but verify.)
+**Measured levels (2026-08-08, keypad direct to desk, vs pin 7):**
+
+| Line | Keypad asleep | Keypad active |
+|---|---|---|
+| 4 (PIN 20) | 0 V | 4.1 V |
+| 5 (keypad-TX) | 1 V (undriven/float) | 3.7 V |
+| 6 (desk-TX) | 4.6 V (UART idle high) | 3.5 V (avg while transmitting) |
+
+Conclusion: **5 V logic**, and PIN 20 is actively driven high while the keypad is awake. ESP32 GPIOs are not 5 V tolerant, so **every tap gets a resistor divider**: 4.7k from RJ45 line to GPIO, 10k from GPIO to GND (5 V→3.4 V, 4.6 V→3.1 V; ESP32 V_IH ≈ 2.5 V, abs max 3.6 V). 10k/15k is an acceptable substitute (5 V→3.0 V).
 
 ## ESPHome node (`desk-sniffer.yaml`)
 
@@ -65,7 +73,7 @@ Exit criterion for Phase 1: questions (a) and (b) answered from captures. That d
 
 ## Risks
 
-- **Voltage:** covered by the multimeter gate above.
+- **Voltage:** measured 5 V logic; mitigated by the dividers above.
 - **UART invert/idle level:** if a bus shows garbage, first suspects are swapped pins 5/6 or inverted logic (`invert: true` on the UART pin is the test).
 - **GPIO34 has no internal pull:** if PIN 20 floats when idle, readings may bounce; acceptable for logging (we care about driven states), can add external pulldown if noisy.
 - **Powering from desk during flashing:** never USB and desk 5 V simultaneously unless the devkit's diode handles it; unplug RJ45 power lead when flashing over USB.
