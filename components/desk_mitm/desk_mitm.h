@@ -6,6 +6,9 @@
 
 namespace desk_mitm {
 
+class DeskCover;
+class DeskNumber;
+
 class DeskMitm : public esphome::Component {
  public:
   void set_uarts(esphome::uart::UARTComponent *desk, esphome::uart::UARTComponent *keypad) {
@@ -27,6 +30,31 @@ class DeskMitm : public esphome::Component {
   // Wake the controller with no key injection, so it streams the current
   // height (display frames) and sleeps again on its own. Used at boot.
   void request_height();
+
+  void set_move_config(float min_h, float max_h, float coast, float deadband,
+                       uint32_t settle_ms, uint32_t timeout_ms, uint32_t stall_ms,
+                       uint8_t max_taps) {
+    move_cfg_.min_height = min_h;
+    move_cfg_.max_height = max_h;
+    move_cfg_.coast_margin = coast;
+    move_cfg_.deadband = deadband;
+    move_cfg_.settle_ms = settle_ms;
+    move_cfg_.move_timeout_ms = timeout_ms;
+    move_cfg_.stall_ms = stall_ms;
+    move_cfg_.max_taps = max_taps;
+    mover_.set_config(move_cfg_);
+  }
+  void set_cover(DeskCover *c) { cover_ = c; }
+  void set_target_number(DeskNumber *n) { target_number_ = n; }
+
+  void move_to_height(float cm);
+  void move_to_position(float pos) {
+    move_to_height(move_cfg_.min_height + pos * (move_cfg_.max_height - move_cfg_.min_height));
+  }
+  float position_from_height_(float h) const {
+    float p = (h - move_cfg_.min_height) / (move_cfg_.max_height - move_cfg_.min_height);
+    return p < 0 ? 0 : (p > 1 ? 1 : p);
+  }
   void set_emulation(bool on) { emulation_ = on; }
 
   float get_height() const { return height_; }
@@ -66,6 +94,14 @@ class DeskMitm : public esphome::Component {
 
   uint8_t height_fetch_attempts_{0};
   uint32_t last_height_fetch_ms_{0};
+
+  MoveConfig move_cfg_;
+  MoveController mover_{move_cfg_};
+  uint8_t mover_mask_{0};
+  float pending_target_{NAN};  // move deferred until controller wakes
+  DeskCover *cover_{nullptr};
+  DeskNumber *target_number_{nullptr};
+  void publish_cover_state_();
 };
 
 }  // namespace desk_mitm

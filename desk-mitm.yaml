@@ -1,3 +1,8 @@
+substitutions:
+  # UNCALIBRATED placeholders — jog to physical bottom/top, read heights, update.
+  min_height: "60.0"
+  max_height: "121.0"
+
 esphome:
   name: desk-sniffer
   friendly_name: Flexispot Desk
@@ -59,6 +64,8 @@ desk_mitm:
     number: GPIO27
     mode:
       output: true
+  min_height: ${min_height}
+  max_height: ${max_height}
 
 binary_sensor:
   - platform: gpio
@@ -86,6 +93,21 @@ sensor:
       return h;
     filters:
       - delta: 0.01  # publish only on actual change; the lambda polls at 500ms regardless
+
+cover:
+  - platform: desk_mitm
+    name: "Desk"
+    icon: mdi:desk
+
+number:
+  - platform: desk_mitm
+    name: "Target Height"
+    unit_of_measurement: "cm"
+    icon: mdi:human-male-height
+    mode: box
+    min_value: ${min_height}
+    max_value: ${max_height}
+    step: 0.1
 
 switch:
   - platform: template

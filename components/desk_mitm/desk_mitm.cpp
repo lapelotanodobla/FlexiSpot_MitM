@@ -1,4 +1,6 @@
 #include "desk_mitm.h"
+#include "desk_cover.h"
+#include "desk_number.h"
 #include "esphome/core/log.h"
 
 namespace desk_mitm {
@@ -37,6 +39,16 @@ void DeskMitm::loop() {
   // make the unsigned comparisons below underflow into false timeouts.
   const uint32_t now = millis();
 
+  // Tick the move engine once per loop; poll replies read mover_mask_.
+  {
+    bool was_active = mover_.active();
+    mover_mask_ = mover_.update(height_, now);
+    if (was_active && !mover_.active()) {
+      ESP_LOGI(TAG, "move ended: %d (height %.1f)", (int) mover_.end_reason(), height_);
+      publish_cover_state_();
+    }
+  }
+
   // Poll watchdog: 500 ms of silence clears everything.
   if (polling_ && now - last_poll_ms_ > 500) {
     polling_ = false;
@@ -73,6 +85,10 @@ void DeskMitm::handle_desk_frame_(const Frame &f) {
         keys_.inject(pending_mask_, pending_duration_, now);
         pending_mask_ = 0;
       }
+      if (!std::isnan(pending_target_)) {  // wake-deferred move starts now
+        mover_.move_to(pending_target_, height_, now);
+        pending_target_ = NAN;
+      }
       reply_to_poll_();
       break;
     case 0x12: {  // display
@@ -81,6 +97,7 @@ void DeskMitm::handle_desk_frame_(const Frame &f) {
         if (!std::isnan(h) && h != height_) {
           height_ = h;
           last_height_change_ms_ = now;
+          publish_cover_state_();
         }
       }
       break;
@@ -99,6 +116,10 @@ void DeskMitm::handle_keypad_frame_(const Frame &f) {
   // Squelch wake transients for 300 ms after PIN 20 rise.
   if (sense_state_ && now - sense_rise_ms_ < 300) return;
   if (f.type == 0x02 && f.payload.size() == 2) {
+    if (f.payload[0] != 0 && mover_.active()) {
+      ESP_LOGI(TAG, "physical key %02X overrides move-to-height; aborting", f.payload[0]);
+      mover_.abort();
+    }
     keys_.set_real(f.payload[0]);
     last_real_reply_ = f.raw;
     last_real_reply_ms_ = now;
@@ -121,7 +142,8 @@ void DeskMitm::reply_to_poll_() {
     desk_->write_array(idle.data(), idle.size());
     return;
   }
-  auto reply = build_key_reply(keys_.current(now));
+  uint8_t mask = mover_.active() ? mover_mask_ : keys_.current(now);
+  auto reply = build_key_reply(mask);
   desk_->write_array(reply.data(), reply.size());
 }
 
@@ -143,6 +165,7 @@ void DeskMitm::inject(uint8_t mask, uint32_t duration_ms) {
 }
 
 void DeskMitm::stop() {
+  mover_.abort();
   keys_.stop();
   const uint32_t now = millis();
   // Idle replies do not cancel a controller-autonomous (preset) move — but any
@@ -163,9 +186,11 @@ void DeskMitm::request_height() {
 
 void DeskMitm::update_pin20_() {
   const uint32_t now = millis();
-  // Hold our wake while: injection pending/active, or height still settling.
+  // Hold our wake while: injection or move pending/active, or height settling.
   bool moving_recently = now - last_height_change_ms_ < 1000;
-  if (wake_request_ && pending_mask_ == 0 && !keys_.injection_active(now) && !moving_recently)
+  bool move_engaged = mover_.active() || !std::isnan(pending_target_);
+  if (wake_request_ && pending_mask_ == 0 && !keys_.injection_active(now) && !moving_recently &&
+      !move_engaged)
     wake_request_ = false;
   // Mirror keypad wake; OR in our own.
   pin20_drive_->digital_write(sense_state_ || wake_request_);
@@ -174,7 +199,39 @@ void DeskMitm::update_pin20_() {
 void DeskMitm::failsafe_clear_(const char *reason) {
   keys_.clear_all();
   pending_mask_ = 0;
+  mover_.abort();
+  pending_target_ = NAN;
   ESP_LOGD(TAG, "key state cleared (%s)", reason);
+}
+
+void DeskMitm::move_to_height(float cm) {
+  const uint32_t now = millis();
+  if (!emulation_) {
+    ESP_LOGW(TAG, "move_to_height ignored: emulation mode is off");
+    return;
+  }
+  if (polling_) {
+    if (mover_.move_to(cm, height_, now)) ESP_LOGI(TAG, "move_to %.1f cm", cm);
+    return;
+  }
+  ESP_LOGI(TAG, "controller asleep; waking for move_to %.1f cm", cm);
+  pending_target_ = cm;
+  wake_request_ = true;
+  wake_started_ms_ = now;
+}
+
+void DeskMitm::publish_cover_state_() {
+  if (cover_ == nullptr || std::isnan(height_)) return;
+  float pos = position_from_height_(height_);
+  int dir = mover_.active() ? mover_.direction(height_) : 0;
+  auto op = dir > 0   ? esphome::cover::COVER_OPERATION_OPENING
+            : dir < 0 ? esphome::cover::COVER_OPERATION_CLOSING
+                      : esphome::cover::COVER_OPERATION_IDLE;
+  if (pos != cover_->position || op != cover_->current_operation) {
+    cover_->position = pos;
+    cover_->current_operation = op;
+    cover_->publish_state();
+  }
 }
 
 }  // namespace desk_mitm
