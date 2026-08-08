@@ -29,7 +29,7 @@ keypad ──pin 6 (keypad side)──► ESP ──pin 6 (desk side)──► c
           or forwards unknown frames)      real keys, or HA-injected keys)
 
 keypad ──pin 4 (keypad side)──► ESP sense ──pin 4 (desk side)──► controller
-         (divider → GPIO34)      (GPIO27 → shifter: mirrors keypad wake,
+         (divider → GPIO4)       (GPIO2 → shifter: mirrors keypad wake,
                                   ORs in ESP's own wake for HA commands)
 ```
 
@@ -44,9 +44,9 @@ Pin numbering note: hold the plug clip-down, contacts toward you, pin 1 on the l
 | 1 (RES) | straight | — |
 | 2 (SWIM) | straight | — |
 | 3 (n/c) | straight | — |
-| 4 (PIN 20) | **CUT** | keypad side → 4.7k → `GPIO34` node → 10k → GND · desk side ← shifter `HV4`, `LV4` ← `GPIO27` |
+| 4 (PIN 20) | **CUT** | keypad side → 4.7k → `GPIO4` node → 10k → GND · desk side ← shifter `HV4`, `LV4` ← `GPIO2` |
 | 5 (controller→keypad UART) | straight + tap | tap → shifter `HV2`, `LV2` → `GPIO17` |
-| 6 (keypad→controller UART) | **CUT** | keypad side → shifter `HV1`, `LV1` → `GPIO16` · desk side ← shifter `HV3`, `LV3` ← `GPIO26` |
+| 6 (keypad→controller UART) | **CUT** | keypad side → shifter `HV1`, `LV1` → `GPIO16` · desk side ← shifter `HV3`, `LV3` ← `GPIO15` |
 | 7 (GND) | straight | ESP `GND`, shifter `GND` |
 | 8 (+5 V) | straight | ESP `VIN`, shifter `HV` ref |
 
@@ -57,6 +57,7 @@ Shifter `LV` ref ← ESP `3V3`.
 - ESP32 pins are **not 5 V tolerant** — nothing from the bus may touch a GPIO without the shifter or the divider.
 - The PIN 20 *sense* is a plain resistor divider (not a shifter channel) on purpose: shifter boards pull their HV side to 5 V, which would hold a sleeping desk awake.
 - Power the ESP from desk 5 V (pin 8 → VIN). **Never desk 5 V and USB at the same time** — unplug the pin-8 lead before flashing over USB. OTA needs no cable.
+- `GPIO2`/`GPIO15` are boot-strapping pins. Harmless in normal operation (the shifter's LV pull-ups even give a clean UART idle during boot, and GPIO2 blinks the onboard LED with the wake line) — but if a **USB** flash ever refuses to enter the bootloader, disconnect those two LV leads first. OTA is unaffected.
 
 ## Repo layout
 

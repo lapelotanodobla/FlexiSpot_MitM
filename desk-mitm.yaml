@@ -45,7 +45,7 @@ web_server:
 uart:
   - id: uart_desk    # RX: controller TX tap (RJ45 pin 5, desk side); TX: controller RX (pin 6, desk side)
     rx_pin: GPIO17
-    tx_pin: GPIO26
+    tx_pin: GPIO15   # strapping pin: fine in normal use; disconnect LV lead if a USB flash won't enter bootloader
     baud_rate: 9600
   - id: uart_keypad  # RX only: keypad TX (RJ45 pin 6, keypad side)
     rx_pin: GPIO16
@@ -56,12 +56,12 @@ desk_mitm:
   desk_uart: uart_desk
   keypad_uart: uart_keypad
   pin20_sense_pin:
-    number: GPIO34
+    number: GPIO4
     allow_other_uses: true
     mode:
       input: true
   pin20_drive_pin:
-    number: GPIO27
+    number: GPIO2  # strapping pin + onboard LED (LED mirrors the wake line)
     mode:
       output: true
   min_height: ${min_height}
@@ -70,7 +70,7 @@ desk_mitm:
 binary_sensor:
   - platform: gpio
     pin:
-      number: GPIO34
+      number: GPIO4
       allow_other_uses: true
       mode:
         input: true
