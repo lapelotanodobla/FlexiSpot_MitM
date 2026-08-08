@@ -104,12 +104,96 @@ static void test_key_state() {
   assert(k.current(4010) == 0x10);
 }
 
+// Simulated desk: 2.2 cm/s while a key is held, 0.4 cm coast after release,
+// display quantized to 0.1 cm. Matches measured constants in the findings docs.
+struct SimDesk {
+  float h;
+  float coast_left{0};
+  int dir{0};
+  void step(uint8_t mask, uint32_t dt_ms) {
+    const float v = 2.2f * dt_ms / 1000.0f;
+    if (mask == 0x01) { h += v; dir = 1; coast_left = 0.4f; }
+    else if (mask == 0x02) { h -= v; dir = -1; coast_left = 0.4f; }
+    else if (coast_left > 0) {
+      float c = v < coast_left ? v : coast_left;
+      h += dir * c;
+      coast_left -= c;
+    }
+  }
+  float display() const { return roundf(h * 10) / 10; }
+};
+
+// Drive controller against sim until it goes idle or 60 simulated seconds pass.
+static void run_sim(MoveController &mc, SimDesk &sim, uint32_t &now) {
+  const uint32_t deadline = now + 60000;
+  while (mc.active() && now < deadline) {
+    uint8_t mask = mc.update(sim.display(), now);
+    sim.step(mask, 10);
+    now += 10;
+  }
+}
+
+static void test_move_controller_happy() {
+  MoveConfig cfg;  // defaults from the spec
+  {  // long up move lands within deadband
+    MoveController mc(cfg);
+    SimDesk sim{75.0f};
+    uint32_t now = 1000;
+    assert(mc.move_to(110.0f, sim.display(), now));
+    run_sim(mc, sim, now);
+    assert(!mc.active());
+    assert(mc.end_reason() == MoveEnd::DONE);
+    assert(std::fabs(sim.display() - 110.0f) <= cfg.deadband + 0.001f);
+  }
+  {  // long down move
+    MoveController mc(cfg);
+    SimDesk sim{110.0f};
+    uint32_t now = 1000;
+    assert(mc.move_to(75.0f, sim.display(), now));
+    run_sim(mc, sim, now);
+    assert(mc.end_reason() == MoveEnd::DONE);
+    assert(std::fabs(sim.display() - 75.0f) <= cfg.deadband + 0.001f);
+  }
+  {  // early release: key must drop out BEFORE the display reaches the target
+    MoveController mc(cfg);
+    SimDesk sim{80.0f};
+    uint32_t now = 1000;
+    mc.move_to(90.0f, sim.display(), now);
+    float last_commanded_h = NAN;
+    while (mc.active() && now < 61000) {
+      uint8_t mask = mc.update(sim.display(), now);
+      if (mask != 0) last_commanded_h = sim.display();
+      sim.step(mask, 10);
+      now += 10;
+    }
+    assert(mc.end_reason() == MoveEnd::DONE);
+    assert(last_commanded_h < 90.0f);  // released below target, coast covered the rest
+  }
+  {  // target outside range is clamped to the rail
+    MoveConfig c2;
+    c2.min_height = 60.0f;
+    c2.max_height = 121.0f;
+    MoveController mc(c2);
+    SimDesk sim{119.0f};
+    uint32_t now = 1000;
+    assert(mc.move_to(300.0f, sim.display(), now));
+    run_sim(mc, sim, now);
+    assert(std::fabs(sim.display() - 121.0f) <= c2.deadband + 0.001f);
+  }
+  {  // NaN target rejected outright
+    MoveController mc(cfg);
+    assert(!mc.move_to(NAN, 75.0f, 1000));
+    assert(!mc.active());
+  }
+}
+
 int main() {
   test_crc16();
   test_parser();
   test_height();
   test_build_reply();
   test_key_state();
+  test_move_controller_happy();
   printf("all tests passed\n");
   return 0;
 }

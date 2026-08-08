@@ -134,4 +134,114 @@ class KeyState {
   bool inj_active_{false};
 };
 
+struct MoveConfig {
+  float min_height{60.0f}, max_height{121.0f};
+  float coast_margin{0.7f}, deadband{0.3f};
+  uint32_t settle_ms{1200}, move_timeout_ms{30000}, stall_ms{2000}, tap_ms{60};
+  uint8_t max_taps{5};
+};
+
+enum class MoveEnd : uint8_t { NONE, DONE, TAP_LIMIT, TIMEOUT, STALL, ABORTED };
+
+// Closed-loop move engine. Pure logic: tick update() with the latest decoded
+// height; it returns the key mask to emit right now (0 = idle). Never touches
+// hardware; the glue owns wake, injection and abort triggers.
+class MoveController {
+ public:
+  explicit MoveController(const MoveConfig &cfg) : cfg_(cfg) {}
+  void set_config(const MoveConfig &cfg) { cfg_ = cfg; }
+
+  // Starts a move. Target is clamped to [min_height, max_height]; NaN rejected.
+  // `current` may be NAN (height not yet known) — COARSE waits for frames.
+  bool move_to(float target, float current, uint32_t now) {
+    if (std::isnan(target)) return false;
+    if (target < cfg_.min_height) target = cfg_.min_height;
+    if (target > cfg_.max_height) target = cfg_.max_height;
+    target_ = target;
+    start_ms_ = now;
+    last_h_ = current;
+    last_h_change_ = now;
+    taps_ = 0;
+    end_ = MoveEnd::NONE;
+    state_ = State::COARSE;
+    return true;
+  }
+
+  void abort() {
+    if (state_ != State::IDLE) end_ = MoveEnd::ABORTED;
+    state_ = State::IDLE;
+  }
+
+  bool active() const { return state_ != State::IDLE; }
+  MoveEnd end_reason() const { return end_; }
+  float target() const { return target_; }
+  // Direction of the current move: +1 up, -1 down, 0 idle. For cover operation state.
+  int direction(float current) const {
+    if (state_ == State::IDLE || std::isnan(current)) return 0;
+    return target_ > current ? 1 : -1;
+  }
+
+  uint8_t update(float h, uint32_t now) {
+    if (state_ == State::IDLE) return 0;
+    if (now - start_ms_ > cfg_.move_timeout_ms) return end_with_(MoveEnd::TIMEOUT);
+    switch (state_) {
+      case State::COARSE: {
+        if (std::isnan(h)) {
+          // Height unknown (e.g. just woke): hold still, wait for frames.
+          // The stall guard below uses last_h_change_, armed at move start.
+          if (now - last_h_change_ > cfg_.stall_ms) return end_with_(MoveEnd::STALL);
+          return 0;
+        }
+        if (std::isnan(last_h_) || h != last_h_) { last_h_ = h; last_h_change_ = now; }
+        float err = target_ - h;
+        if (std::fabs(err) <= cfg_.coast_margin) {
+          state_ = State::SETTLE;
+          settle_until_ = now + cfg_.settle_ms;
+          return 0;
+        }
+        // Stall only matters while we are commanding motion and it isn't happening.
+        if (now - last_h_change_ > cfg_.stall_ms) return end_with_(MoveEnd::STALL);
+        return err > 0 ? 0x01 : 0x02;
+      }
+      case State::SETTLE:
+        if (now < settle_until_) return 0;
+        state_ = State::FINE;
+        [[fallthrough]];
+      case State::FINE: {
+        if (std::isnan(h)) return end_with_(MoveEnd::STALL);
+        float err = target_ - h;
+        if (std::fabs(err) <= cfg_.deadband) return end_with_(MoveEnd::DONE);
+        if (taps_ >= cfg_.max_taps) return end_with_(MoveEnd::TAP_LIMIT);
+        taps_++;
+        tap_key_ = err > 0 ? 0x01 : 0x02;
+        tap_until_ = now + cfg_.tap_ms;
+        state_ = State::TAP;
+        return tap_key_;
+      }
+      case State::TAP:
+        if (now < tap_until_) return tap_key_;
+        state_ = State::SETTLE;
+        settle_until_ = now + cfg_.settle_ms;
+        return 0;
+      case State::IDLE:
+        break;
+    }
+    return 0;
+  }
+
+ private:
+  uint8_t end_with_(MoveEnd e) {
+    end_ = e;
+    state_ = State::IDLE;
+    return 0;
+  }
+
+  enum class State : uint8_t { IDLE, COARSE, SETTLE, FINE, TAP } state_{State::IDLE};
+  MoveConfig cfg_;
+  float target_{NAN}, last_h_{NAN};
+  uint32_t start_ms_{0}, last_h_change_{0}, settle_until_{0}, tap_until_{0};
+  uint8_t taps_{0}, tap_key_{0};
+  MoveEnd end_{MoveEnd::NONE};
+};
+
 }  // namespace desk_mitm
