@@ -101,7 +101,11 @@ esphome logs desk-mitm.yaml                    # live logs over WiFi
 c++ -std=c++17 -o build/test_protocol tests/test_protocol.cpp && ./build/test_protocol
 ```
 
-Home Assistant entities (via native ESPHome API): `Desk Height` (cm, fetched automatically at boot via a wake pulse), `PIN 20` / `Controller Polling` / `Refresh Height` (diagnostics), `Emulation Mode` switch, and buttons `Desk Up (jog)`, `Desk Down (jog)`, `Desk Stop`, `Desk Preset 1/2/3`. The node also serves a local web UI + REST API at its IP (`web_server`).
+Home Assistant entities (via native ESPHome API): a **`Desk` cover** (position slider mapped over the calibrated travel range, open/close/stop) and a **`Target Height` number** (cm — type 110, desk goes to 110.0 ± 0.1), both driven by an on-device closed-loop engine (~500 ms wake from sleep, lands within one display quantum, physical keypad presses instantly override any automated move). Plus `Desk Height` (cm, fetched automatically at boot via a wake pulse), `PIN 20` / `Controller Polling` / `Refresh Height` (diagnostics), `Emulation Mode` switch, and buttons `Desk Up (jog)`, `Desk Down (jog)`, `Desk Stop`, `Desk Preset 1/2/3`. The node also serves a local web UI + REST API at its IP (`web_server`).
+
+Calibrate once: jog to the physical bottom and top, read both heights, set the `min_height`/`max_height` substitutions. Closed-loop tunables (`coast_margin`, `deadband`, `settle_ms`, …) are component config — a heavier desk coasts further; that's the knob if landings need correction taps.
+
+**ESP8266?** Workable: the keypad-side RX moves to software serial (only one full hardware UART), `logger: baud_rate: 0` frees UART0, and drop `web_server` for RAM. The component itself is platform-independent. An ESP32 remains the recommendation.
 
 **Emulation Mode off** (default at boot) = echo mode: the ESP replays the real keypad's frames verbatim — zero protocol logic in the loop, useful as a first bring-up step and a permanent escape hatch. Injection requires the switch on.
 
