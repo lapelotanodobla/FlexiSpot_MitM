@@ -76,11 +76,40 @@ static void test_build_reply() {
   assert(up[3] == 0x01 && up[5] == 0xFC && up[6] == 0xA0);
 }
 
+static void test_key_state() {
+  KeyState k;
+  // Default idle.
+  assert(k.current(1000) == 0x00);
+  // Real keys pass through.
+  k.set_real(0x01);
+  assert(k.current(1000) == 0x01);
+  // Injection REPLACES real keys (never ORs).
+  k.inject(0x04, 150, 1000);
+  assert(k.current(1010) == 0x04);
+  // Injection expires by deadline even with no further events.
+  assert(k.current(1200) == 0x01);
+  // stop() clears injection immediately.
+  k.inject(0x04, 150, 2000);
+  k.stop();
+  assert(k.current(2010) == 0x01);
+  // clear_all releases everything (fail-safe path).
+  k.clear_all();
+  assert(k.current(2020) == 0x00);
+  // Invalid masks are rejected: multi-bit and opposing directions never emitted.
+  assert(!k.inject(0x03, 150, 3000));
+  assert(!k.inject(0xC0, 150, 3000));
+  assert(k.current(3010) == 0x00);
+  // Valid single-key masks accepted.
+  assert(k.inject(0x10, 150, 4000));
+  assert(k.current(4010) == 0x10);
+}
+
 int main() {
   test_crc16();
   test_parser();
   test_height();
   test_build_reply();
+  test_key_state();
   printf("all tests passed\n");
   return 0;
 }

@@ -96,4 +96,42 @@ inline std::vector<uint8_t> build_key_reply(uint8_t keys) {
   return f;
 }
 
+// Local key-state model. Injection replaces physical keys for its bounded
+// window; fail-safe callers use clear_all() (poll timeout, CRC storm, type-13,
+// PIN20 fall, reboot paths are the ESPHome layer's responsibility).
+class KeyState {
+ public:
+  void set_real(uint8_t mask) { real_ = mask; }
+
+  // Only idle or a single documented key may be injected.
+  bool inject(uint8_t mask, uint32_t duration_ms, uint32_t now_ms) {
+    static constexpr uint8_t VALID[] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20};
+    bool ok = false;
+    for (uint8_t v : VALID) ok |= (mask == v);
+    if (!ok) return false;
+    inj_ = mask;
+    inj_deadline_ = now_ms + duration_ms;
+    inj_active_ = true;
+    return true;
+  }
+
+  void stop() { inj_active_ = false; }
+  void clear_all() { inj_active_ = false; real_ = 0; }
+
+  uint8_t current(uint32_t now_ms) {
+    if (inj_active_ && now_ms >= inj_deadline_) inj_active_ = false;
+    return inj_active_ ? inj_ : real_;
+  }
+
+  bool injection_active(uint32_t now_ms) {
+    if (inj_active_ && now_ms >= inj_deadline_) inj_active_ = false;
+    return inj_active_;
+  }
+
+ private:
+  uint8_t real_{0}, inj_{0};
+  uint32_t inj_deadline_{0};
+  bool inj_active_{false};
+};
+
 }  // namespace desk_mitm
