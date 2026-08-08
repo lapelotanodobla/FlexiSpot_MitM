@@ -13,11 +13,9 @@ void DeskMitm::setup() {
 }
 
 void DeskMitm::loop() {
-  const uint32_t now = millis();
-
   // PIN 20 sense edges.
   bool s = pin20_sense_->digital_read();
-  if (s && !sense_state_) sense_rise_ms_ = now;
+  if (s && !sense_state_) sense_rise_ms_ = millis();
   if (!s && sense_state_) failsafe_clear_("pin20 fell");
   sense_state_ = s;
 
@@ -33,6 +31,11 @@ void DeskMitm::loop() {
     keypad_->read_byte(&b);
     if (keypad_parser_.feed(b, f)) handle_keypad_frame_(f);
   }
+
+  // Timestamp taken AFTER the drains: frame handlers stamp last_poll_ms_ with a
+  // fresh millis(), so a pre-drain timestamp here would sit in their past and
+  // make the unsigned comparisons below underflow into false timeouts.
+  const uint32_t now = millis();
 
   // Poll watchdog: 500 ms of silence clears everything.
   if (polling_ && now - last_poll_ms_ > 500) {
