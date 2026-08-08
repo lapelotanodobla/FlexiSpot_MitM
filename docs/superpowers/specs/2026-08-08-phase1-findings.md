@@ -34,7 +34,7 @@ The keypad answers every poll with `9B:06:02:<keys>:00:<crc>:9D`. `<keys>` is a 
 | Preset 1 | `04:00` | single ~5-frame burst, desk then moves autonomously |
 | Preset 2 | `08:00` | same |
 | Preset 3 | `10:00` | same |
-| M | `20:00` | display switches to `-` prompt for ~4 s, then reverts |
+| M | `20:00` | display switches to `S-` programming prompt for ~4 s, then reverts |
 
 Key facts: a **preset tap is fire-and-forget** — the desk completes the whole move while the keypad streams `00:00`. Manual up/down moves only while the key code streams; release stops the desk.
 
@@ -55,7 +55,7 @@ Key facts: a **preset tap is fire-and-forget** — the desk completes the whole 
 2. **Split PIN 20**: sense the keypad side (divider→GPIO), drive the desk side (shifter channel). Mirror keypad→desk by default; OR-in ESP's own wake when injecting.
 3. **To inject a command with the keypad asleep**: drive desk-side PIN 20 high, wait ≥350 ms for the controller to start polling, then answer polls with the command payload for ~4-5 polls (~150 ms), then stream `00:00` idle replies. Presets are fire-and-forget after that; the move completes on its own. Keep PIN 20 high at least until the move ends (height sensor goes quiet).
 4. **The controller is the poll master.** A passthrough MITM must forward polls promptly; the observed poll→reply turnaround is ~6 ms, so per-byte forwarding latency well under that is required. Frame-level store-and-forward at ~1 ms/byte UART speed fits comfortably.
-5. **Height telemetry is free**: decode `type 12` display frames (7-segment, bit7 = decimal point; 3-digit values ≥100 drop the dot).
+5. **Height telemetry is free**: decode `type 12` display frames — payload is frame bytes 3–5 (after `9B <len> 12`), 7-segment encoded, bit7 = decimal point; 3-digit values ≥100 drop the dot. Decoder validated against session 1: continuous cm readings 75.0–121.0 with no gaps (session presets: P1=121.0, P2≈77.2, P3=75.0). Non-numeric glyphs appear only in the M-mode `S-` prompt.
 6. **Hygiene**: discard partial frames after `type 13`/PIN 20 fall; ignore first ~300 ms of keypad bytes after wake.
 
 ## Exit criteria

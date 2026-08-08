@@ -53,7 +53,7 @@ for line in open(sys.argv[1]):
         else:
             key_count += 1
     elif tag == 'DESK' and typ == '12':
-        disp = ''.join(seg(int(p,16)) for p in parts[4:7])
+        disp = ''.join(seg(int(p,16)) for p in parts[3:6])
         if disp != last_disp:
             events.append((ts, f"DISPLAY -> \"{disp}\""))
             last_disp = disp
