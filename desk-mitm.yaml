@@ -74,18 +74,24 @@ binary_sensor:
       allow_other_uses: true
       mode:
         input: true
-    name: "PIN 20"
+    name: "Keypad Active"
     id: pin20
-  - platform: template
-    name: "Controller Polling"
     entity_category: diagnostic
+    icon: mdi:gesture-tap-button
+  - platform: template
+    name: "Controller Awake"
+    entity_category: diagnostic
+    disabled_by_default: true
+    icon: mdi:chip
     lambda: return id(mitm).get_controller_polling();
 
 sensor:
   - platform: template
-    name: "Desk Height"
+    name: "Height"
     unit_of_measurement: "cm"
     accuracy_decimals: 1
+    state_class: measurement
+    icon: mdi:arrow-expand-vertical
     update_interval: 500ms
     lambda: |-
       float h = id(mitm).get_height();
@@ -96,7 +102,7 @@ sensor:
 
 cover:
   - platform: desk_mitm
-    name: "Desk"
+    name: ""  # adopts the device name -> shows as "Flexispot Desk"
     icon: mdi:desk
 
 number:
@@ -113,6 +119,8 @@ switch:
   - platform: template
     name: "Emulation Mode"
     id: emulation_mode
+    entity_category: config
+    icon: mdi:robot
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     turn_on_action:
@@ -122,24 +130,31 @@ switch:
 
 button:
   - platform: template
-    name: "Desk Up (jog)"
+    name: "Nudge Up"
+    icon: mdi:arrow-up-bold
     on_press: [lambda: 'id(mitm).inject(0x01, 300);']
   - platform: template
-    name: "Desk Down (jog)"
+    name: "Nudge Down"
+    icon: mdi:arrow-down-bold
     on_press: [lambda: 'id(mitm).inject(0x02, 300);']
   - platform: template
-    name: "Desk Stop"
+    name: "Stop"
+    icon: mdi:stop-circle-outline
     on_press: [lambda: 'id(mitm).stop();']
   - platform: template
-    name: "Desk Preset 1"
+    name: "Preset 1"
+    icon: mdi:numeric-1-box
     on_press: [lambda: 'id(mitm).inject(0x04, 150);']
   - platform: template
-    name: "Desk Preset 2"
+    name: "Preset 2"
+    icon: mdi:numeric-2-box
     on_press: [lambda: 'id(mitm).inject(0x08, 150);']
   - platform: template
-    name: "Desk Preset 3"
+    name: "Preset 3"
+    icon: mdi:numeric-3-box
     on_press: [lambda: 'id(mitm).inject(0x10, 150);']
   - platform: template
     name: "Refresh Height"
     entity_category: diagnostic
+    icon: mdi:refresh
     on_press: [lambda: 'id(mitm).request_height();']
