@@ -1,0 +1,109 @@
+esphome:
+  name: desk-sniffer
+  friendly_name: Flexispot Desk
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+logger:
+  level: DEBUG
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  use_address: 192.168.40.65
+  ap:
+    ssid: "Desk-Sniffer Fallback"
+
+captive_portal:
+
+uart:
+  - id: uart_desk    # RX: controller TX tap (RJ45 pin 5, desk side); TX: controller RX (pin 6, desk side)
+    rx_pin: GPIO17
+    tx_pin: GPIO26
+    baud_rate: 9600
+  - id: uart_keypad  # RX only: keypad TX (RJ45 pin 6, keypad side)
+    rx_pin: GPIO16
+    baud_rate: 9600
+
+desk_mitm:
+  id: mitm
+  desk_uart: uart_desk
+  keypad_uart: uart_keypad
+  pin20_sense_pin:
+    number: GPIO34
+    allow_other_uses: true
+    mode:
+      input: true
+  pin20_drive_pin:
+    number: GPIO27
+    mode:
+      output: true
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO34
+      allow_other_uses: true
+      mode:
+        input: true
+    name: "PIN 20"
+    id: pin20
+  - platform: template
+    name: "Controller Polling"
+    entity_category: diagnostic
+    lambda: return id(mitm).get_controller_polling();
+
+sensor:
+  - platform: template
+    name: "Desk Height"
+    unit_of_measurement: "cm"
+    accuracy_decimals: 1
+    update_interval: 500ms
+    lambda: |-
+      float h = id(mitm).get_height();
+      if (std::isnan(h)) return {};
+      return h;
+
+switch:
+  - platform: template
+    name: "Emulation Mode"
+    id: emulation_mode
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    turn_on_action:
+      - lambda: id(mitm).set_emulation(true);
+    turn_off_action:
+      - lambda: id(mitm).set_emulation(false);
+
+button:
+  - platform: template
+    name: "Desk Up (jog)"
+    on_press: [lambda: 'id(mitm).inject(0x01, 300);']
+  - platform: template
+    name: "Desk Down (jog)"
+    on_press: [lambda: 'id(mitm).inject(0x02, 300);']
+  - platform: template
+    name: "Desk Stop"
+    on_press: [lambda: 'id(mitm).stop();']
+  - platform: template
+    name: "Desk Preset 1"
+    on_press: [lambda: 'id(mitm).inject(0x04, 150);']
+  - platform: template
+    name: "Desk Preset 2"
+    on_press: [lambda: 'id(mitm).inject(0x08, 150);']
+  - platform: template
+    name: "Desk Preset 3"
+    on_press: [lambda: 'id(mitm).inject(0x10, 150);']
