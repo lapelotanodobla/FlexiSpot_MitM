@@ -101,7 +101,7 @@ esphome logs desk-mitm.yaml                    # live logs over WiFi
 c++ -std=c++17 -o build/test_protocol tests/test_protocol.cpp && ./build/test_protocol
 ```
 
-Home Assistant entities (via native ESPHome API): `Desk Height` (cm), `PIN 20` / `Controller Polling` (diagnostics), `Emulation Mode` switch, and buttons `Desk Up (jog)`, `Desk Down (jog)`, `Desk Stop`, `Desk Preset 1/2/3`.
+Home Assistant entities (via native ESPHome API): `Desk Height` (cm, fetched automatically at boot via a wake pulse), `PIN 20` / `Controller Polling` / `Refresh Height` (diagnostics), `Emulation Mode` switch, and buttons `Desk Up (jog)`, `Desk Down (jog)`, `Desk Stop`, `Desk Preset 1/2/3`. The node also serves a local web UI + REST API at its IP (`web_server`).
 
 **Emulation Mode off** (default at boot) = echo mode: the ESP replays the real keypad's frames verbatim — zero protocol logic in the loop, useful as a first bring-up step and a permanent escape hatch. Injection requires the switch on.
 
@@ -122,6 +122,8 @@ Presets are fire-and-forget (one ~150 ms key burst, controller completes the mov
 ## Safety / fail-safes
 
 All key state clears on: poll silence >500 ms, CRC failure, shutdown burst, PIN 20 fall, reboot. Injections carry hard deadlines. Only single documented key masks can ever be emitted. Worst case: unplug the ESP and re-bridge coupler lines 6 and 4 → factory desk.
+
+**⚠ Known hazard — ASR/RST reset state.** If the ESP loses power *during a preset (autonomous) move*, the controller loses position certainty and enters its reset state: display shows `ASr`/`RST`, only downward travel works, and power cycling does **not** clear it. Recovery takes a minute and is the standard Flexispot procedure: hold Down until the desk is fully lowered and `RST` shows (~10 s extra), release; on some units then hold Up (or Up+Down) until a normal height displays. Manual moves are unaffected — the controller stops cleanly when replies vanish. Stop semantics note: reverting to idle replies never cancels a preset move; the firmware's Stop button injects a ~60 ms key tap instead, which does (verified).
 
 ## Credits
 
