@@ -187,6 +187,68 @@ static void test_move_controller_happy() {
   }
 }
 
+static void test_move_controller_failures() {
+  MoveConfig cfg;
+  {  // abort mid-move: goes idle, outputs 0
+    MoveController mc(cfg);
+    SimDesk sim{75.0f};
+    uint32_t now = 1000;
+    mc.move_to(110.0f, sim.display(), now);
+    (void) mc.update(sim.display(), now);
+    mc.abort();
+    assert(!mc.active());
+    assert(mc.end_reason() == MoveEnd::ABORTED);
+    assert(mc.update(sim.display(), now + 10) == 0);
+  }
+  {  // stall: height frozen while commanding motion
+    MoveController mc(cfg);
+    uint32_t now = 1000;
+    mc.move_to(110.0f, 75.0f, now);
+    while (mc.active() && now < 20000) {
+      (void) mc.update(75.0f, now);  // desk never moves
+      now += 10;
+    }
+    assert(mc.end_reason() == MoveEnd::STALL);
+    assert(now - 1000 <= cfg.stall_ms + 100);
+  }
+  {  // timeout: motion keeps happening but never converges (stall never trips)
+    MoveConfig slow = cfg;
+    slow.stall_ms = 10000000;  // disable stall for this case
+    MoveController mc(slow);
+    uint32_t now = 1000;
+    float h = 75.0f;
+    bool flip = false;
+    mc.move_to(110.0f, h, now);
+    while (mc.active() && now < 60000) {
+      (void) mc.update(h, now);
+      h += flip ? 0.1f : -0.1f;  // jitter in place forever
+      flip = !flip;
+      now += 10;
+    }
+    assert(mc.end_reason() == MoveEnd::TIMEOUT);
+  }
+  {  // tap limit: deadband unreachably tight -> gives up after max_taps
+    MoveConfig tight = cfg;
+    tight.deadband = 0.001f;  // display quantizes to 0.1, can't ever satisfy
+    MoveController mc(tight);
+    SimDesk sim{75.0f};
+    uint32_t now = 1000;
+    mc.move_to(90.05f, sim.display(), now);
+    run_sim(mc, sim, now);
+    assert(mc.end_reason() == MoveEnd::TAP_LIMIT);
+  }
+  {  // NaN current at start: waits, then proceeds once height appears
+    MoveController mc(cfg);
+    uint32_t now = 1000;
+    mc.move_to(80.0f, NAN, now);
+    assert(mc.update(NAN, now + 100) == 0);  // holds still while blind
+    SimDesk sim{75.0f};
+    now += 500;  // height arrives 500ms in (post-wake)
+    run_sim(mc, sim, now);
+    assert(mc.end_reason() == MoveEnd::DONE);
+  }
+}
+
 int main() {
   test_crc16();
   test_parser();
@@ -194,6 +256,7 @@ int main() {
   test_build_reply();
   test_key_state();
   test_move_controller_happy();
+  test_move_controller_failures();
   printf("all tests passed\n");
   return 0;
 }
