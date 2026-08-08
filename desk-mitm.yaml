@@ -29,6 +29,10 @@ wifi:
 
 captive_portal:
 
+# Local REST API (http://192.168.40.65) — used to drive verification without HA.
+web_server:
+  version: 3
+
 uart:
   - id: uart_desk    # RX: controller TX tap (RJ45 pin 5, desk side); TX: controller RX (pin 6, desk side)
     rx_pin: GPIO17
