@@ -1,6 +1,6 @@
 substitutions:
-  # UNCALIBRATED placeholders — jog to physical bottom/top, read heights, update.
-  min_height: "60.0"
+  # Calibrated 2026-08-08: physical travel limits read from the display.
+  min_height: "71.0"
   max_height: "121.0"
 
 esphome:
