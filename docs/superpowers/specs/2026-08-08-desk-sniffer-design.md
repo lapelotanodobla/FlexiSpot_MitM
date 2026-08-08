@@ -41,9 +41,9 @@ desk RJ45 ═══════════ 8 straight wires ══════�
 |---|---|---|
 | 8 (+5V) | VIN | Powers ESP from desk |
 | 7 (GND) | GND | Common ground |
-| 6 (desk-TX) | GPIO16 | UART1 RX — controller→keypad traffic |
-| 5 (keypad-TX) | GPIO17 | UART2 RX — keypad→controller traffic |
-| 4 (PIN 20) | GPIO34 | Digital input (input-only pin), edge logging |
+| 6 (desk-TX) | GPIO16 (via shifter ch. 1) | UART1 RX — controller→keypad traffic |
+| 5 (keypad-TX) | GPIO17 (via shifter ch. 2) | UART2 RX — keypad→controller traffic |
+| 4 (PIN 20) | GPIO34 (via 4.7k/10k divider) | Digital input (input-only pin), edge logging |
 
 **Measured levels (2026-08-08, keypad direct to desk, vs pin 7):**
 
@@ -53,7 +53,12 @@ desk RJ45 ═══════════ 8 straight wires ══════�
 | 5 (keypad-TX) | 1 V (undriven/float) | 3.7 V |
 | 6 (desk-TX) | 4.6 V (UART idle high) | 3.5 V (avg while transmitting) |
 
-Conclusion: **5 V logic**, and PIN 20 is actively driven high while the keypad is awake. ESP32 GPIOs are not 5 V tolerant, so **every tap gets a resistor divider**: 4.7k from RJ45 line to GPIO, 10k from GPIO to GND (5 V→3.4 V, 4.6 V→3.1 V; ESP32 V_IH ≈ 2.5 V, abs max 3.6 V). 10k/15k is an acceptable substitute (5 V→3.0 V).
+Conclusion: **5 V logic**, and PIN 20 is at 4.1 V while the keypad is awake. This is also the leading hypothesis for why past passthrough builds killed the keypad: the ESP re-transmitted desk frames at 3.3 V, below reliable V_IH for 5 V logic, so the keypad never heard them (and 3.3 V on PIN 20 may likewise not register as "high").
+
+**Level shifting (ESP32 GPIOs are not 5 V tolerant, and Phase 2 must transmit at 5 V):**
+
+- **Pins 6 and 5 (both UARTs): 4-channel BSS138-style bidirectional shifter board** from the start — correct RX levels now, correct 5 V TX in Phase 2 with no rewiring. RJ45 pin 8 → HV ref, ESP 3V3 → LV ref, common GND. Channel 1: pin 6 ↔ GPIO16; channel 2: pin 5 ↔ GPIO17. Do not use TXS0108-type auto-direction chips (unreliable with bus pullups/long cables at these speeds).
+- **Pin 4 (PIN 20): plain resistor divider** — 4.7k from line to GPIO34, 10k from GPIO34 to GND (5 V→3.4 V; V_IH ≈ 2.5 V, abs max 3.6 V). Deliberately *not* on the shifter in Phase 1: the board's 10k HV pull-ups could pull a passively-low PIN 20 up to 5 V and hold the desk awake, contaminating the capture. If Phase 2 needs to drive PIN 20, that gets a dedicated 5 V driver (spare shifter channel or transistor) informed by the captures.
 
 ## ESPHome node (`desk-sniffer.yaml`)
 
