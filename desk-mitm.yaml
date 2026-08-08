@@ -1,6 +1,10 @@
 esphome:
   name: desk-sniffer
   friendly_name: Flexispot Desk
+  on_boot:
+    priority: -100  # after all components are up
+    then:
+      - lambda: id(mitm).request_height();
 
 esp32:
   board: esp32dev
@@ -80,6 +84,8 @@ sensor:
       float h = id(mitm).get_height();
       if (std::isnan(h)) return {};
       return h;
+    filters:
+      - delta: 0.01  # publish only on actual change; the lambda polls at 500ms regardless
 
 switch:
   - platform: template

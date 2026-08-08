@@ -24,6 +24,9 @@ class DeskMitm : public esphome::Component {
   // Called from YAML template buttons / switch.
   void inject(uint8_t mask, uint32_t duration_ms);
   void stop();
+  // Wake the controller with no key injection, so it streams the current
+  // height (display frames) and sleeps again on its own. Used at boot.
+  void request_height();
   void set_emulation(bool on) { emulation_ = on; }
 
   float get_height() const { return height_; }

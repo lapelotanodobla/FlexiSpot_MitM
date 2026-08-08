@@ -42,9 +42,11 @@ void DeskMitm::loop() {
     polling_ = false;
     failsafe_clear_("poll timeout");
   }
-  // Wake timeout: controller never started polling.
-  if (wake_request_ && pending_mask_ != 0 && now - wake_started_ms_ > 2000 && !polling_) {
-    ESP_LOGW(TAG, "wake timeout: controller did not start polling; dropping injection");
+  // Wake timeout: controller never started polling (applies to injection wakes
+  // and no-injection height-request wakes alike).
+  if (wake_request_ && !polling_ && now - wake_started_ms_ > 2000) {
+    ESP_LOGW(TAG, "wake timeout: controller did not start polling; releasing PIN20%s",
+             pending_mask_ != 0 ? " and dropping injection" : "");
     pending_mask_ = 0;
     wake_request_ = false;
   }
@@ -132,6 +134,13 @@ void DeskMitm::inject(uint8_t mask, uint32_t duration_ms) {
 }
 
 void DeskMitm::stop() { keys_.stop(); }
+
+void DeskMitm::request_height() {
+  if (polling_) return;  // controller awake: height frames already flowing
+  ESP_LOGI(TAG, "height request: waking controller (no injection)");
+  wake_request_ = true;
+  wake_started_ms_ = millis();
+}
 
 void DeskMitm::update_pin20_() {
   const uint32_t now = millis();
