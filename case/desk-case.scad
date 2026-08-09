@@ -25,7 +25,14 @@ floor_th     = 2.0;
 lid_th       = 2.0;
 clearance    = 0.8;    // gap around the board (FDM slop; increase if tight)
 headroom     = 1.5;    // extra air above the tallest component
-lip_h        = 4.0;    // lid skirt depth
+lip_h        = 6.0;    // lid skirt depth (longer = more flex for the snap)
+
+/* ---------- lid attachment ---------- */
+lid_mode     = "snap";  // "snap" (no fasteners) | "screw" (corner towers)
+// snap tuning — reprint the lid and adjust if it's too loose/tight:
+snap_bead_d  = 1.6;    // rounded catch bead diameter on the skirt
+snap_depth   = 0.9;    // how deep the groove cuts into the base wall
+snap_gap     = 0.25;   // skirt-to-wall running clearance (matches skirt offset)
 
 /* ---------- USB opening (end wall at x=0) ---------- */
 usb_w        = 13.0;   // opening width
@@ -84,6 +91,26 @@ module corner_towers() {
     }
 }
 
+// Snap geometry, symmetric about both centerlines so the lid's 180° flip
+// still lines the beads up with the grooves. bead center height (installed):
+snap_z    = base_h - lip_h + 2;
+snap_x0   = wall + 12;
+snap_len  = out_l - 2*(wall + 12);
+
+module base_snap_grooves() {  // cut into the two long walls' inner faces
+  for (yy = [[wall - snap_depth, wall + eps],
+             [out_w - wall - eps, out_w - wall + snap_depth]])
+    translate([snap_x0, yy[0], snap_z - snap_bead_d/2 - 0.4])
+      cube([snap_len, yy[1] - yy[0], snap_bead_d + 0.8]);
+}
+
+module lid_snap_beads() {  // rounded beads on the skirt outer faces (lid coords)
+  z = lid_th + lip_h - 2;  // maps to snap_z once installed
+  for (y = [wall + snap_gap, out_w - wall - snap_gap])
+    translate([snap_x0, y, z]) rotate([0, 90, 0])
+      cylinder(d = snap_bead_d, h = snap_len);
+}
+
 module ear(dir) {  // dir: -1 = x=0 end, +1 = x=out_l end
   hole_x = (dir < 0) ? -ear_len + ear_w/2 - 1 : out_l + ear_len - ear_w/2 + 1;
   anchor_x = (dir < 0) ? 0.5 : out_l - 0.5;
@@ -116,8 +143,9 @@ module base() {
         translate([wall + ledge_w, wall + ledge_w, floor_th - 0.2])
           cube([in_l - 2*ledge_w, in_w - 2*ledge_w, pins_below + 0.4]);
       }
-      corner_towers();
+      if (lid_mode == "screw") corner_towers();
     }
+    if (lid_mode == "snap") base_snap_grooves();
     // USB opening in the x=0 end wall
     translate([-eps,
                out_w/2 + usb_y_off - usb_w/2,
@@ -141,8 +169,9 @@ module lid() {
   difference() {
     union() {
       cube([out_l, out_w, lid_th]);
-      // corner discs covering the base's external towers
-      for (p = corner_pts) translate([p[0], p[1], 0]) cylinder(d = tower_d, h = lid_th);
+      // corner discs covering the base's external towers (screw mode only)
+      if (lid_mode == "screw")
+        for (p = corner_pts) translate([p[0], p[1], 0]) cylinder(d = tower_d, h = lid_th);
       // skirt that drops inside the base walls (overlaps plate for clean union)
       difference() {
         translate([wall + 0.25, wall + 0.25, lid_th - 0.1])
@@ -150,6 +179,7 @@ module lid() {
         translate([wall + 0.25 + 1.6, wall + 0.25 + 1.6, lid_th - 0.2])
           cube([in_l - 0.5 - 3.2, in_w - 0.5 - 3.2, lip_h + 0.4]);
       }
+      if (lid_mode == "snap") lid_snap_beads();
     }
     // RJ45 openings (jacks face up through the lid)
     for (j = [[rj45_a_x, rj45_a_y], [rj45_b_x, rj45_b_y]])
@@ -157,12 +187,13 @@ module lid() {
                  out_w/2 + j[1] - rj45_hole_d/2,
                  -eps])
         cube([rj45_hole_w, rj45_hole_d, lid_th + lip_h + 2*eps]);
-    // lid screw holes + countersinks (through the corner discs, into the towers)
-    for (p = corner_pts)
-      translate([p[0], p[1], -eps]) {
-        cylinder(d = 3.4, h = lid_th + lip_h + 2*eps);
-        cylinder(d = screw_head_d, h = 1.6);
-      }
+    // lid screw holes + countersinks (screw mode only)
+    if (lid_mode == "screw")
+      for (p = corner_pts)
+        translate([p[0], p[1], -eps]) {
+          cylinder(d = 3.4, h = lid_th + lip_h + 2*eps);
+          cylinder(d = screw_head_d, h = 1.6);
+        }
   }
 }
 
