@@ -45,7 +45,6 @@ rj45_b_y     = 11.5;   // jack B center
 
 /* ---------- board mounting ---------- */
 ledge_w      = 2.5;    // perimeter shelf the board rests on
-post_d       = 7.0;    // corner screw posts (lid screws + board corner support)
 screw_d      = 2.8;    // pilot hole for M3 self-tappers
 screw_head_d = 6.2;    // lid countersink
 vent_slots   = true;   // side vents over the ESP32 half
@@ -72,14 +71,16 @@ board_top = board_z + board_th;
 $fn = 32;
 eps = 0.01;
 
-module screw_posts(hole_d, hole_depth) {
-  for (p = [[wall + post_d/2, wall + post_d/2],
-            [out_l - wall - post_d/2, wall + post_d/2],
-            [wall + post_d/2, out_w - wall - post_d/2],
-            [out_l - wall - post_d/2, out_w - wall - post_d/2]])
+// Lid screws live in EXTERNAL corner towers so nothing intrudes into the
+// cavity — the board fills the interior wall-to-wall and must stay untouched.
+tower_d = 9.0;
+corner_pts = [[0, 0], [out_l, 0], [0, out_w], [out_l, out_w]];
+
+module corner_towers() {
+  for (p = corner_pts)
     translate([p[0], p[1], 0]) difference() {
-      cylinder(d = post_d, h = floor_th + in_h);
-      translate([0, 0, floor_th + in_h - hole_depth]) cylinder(d = hole_d, h = hole_depth + eps);
+      cylinder(d = tower_d, h = base_h);
+      translate([0, 0, base_h - 12]) cylinder(d = screw_d, h = 12 + eps);
     }
 }
 
@@ -115,7 +116,7 @@ module base() {
         translate([wall + ledge_w, wall + ledge_w, floor_th - 0.2])
           cube([in_l - 2*ledge_w, in_w - 2*ledge_w, pins_below + 0.4]);
       }
-      screw_posts(screw_d, 12);
+      corner_towers();
     }
     // USB opening in the x=0 end wall
     translate([-eps,
@@ -140,6 +141,8 @@ module lid() {
   difference() {
     union() {
       cube([out_l, out_w, lid_th]);
+      // corner discs covering the base's external towers
+      for (p = corner_pts) translate([p[0], p[1], 0]) cylinder(d = tower_d, h = lid_th);
       // skirt that drops inside the base walls (overlaps plate for clean union)
       difference() {
         translate([wall + 0.25, wall + 0.25, lid_th - 0.1])
@@ -154,11 +157,8 @@ module lid() {
                  out_w/2 + j[1] - rj45_hole_d/2,
                  -eps])
         cube([rj45_hole_w, rj45_hole_d, lid_th + lip_h + 2*eps]);
-    // lid screw holes + countersinks (match base posts)
-    for (p = [[wall + post_d/2, wall + post_d/2],
-              [out_l - wall - post_d/2, wall + post_d/2],
-              [wall + post_d/2, out_w - wall - post_d/2],
-              [out_l - wall - post_d/2, out_w - wall - post_d/2]])
+    // lid screw holes + countersinks (through the corner discs, into the towers)
+    for (p = corner_pts)
       translate([p[0], p[1], -eps]) {
         cylinder(d = 3.4, h = lid_th + lip_h + 2*eps);
         cylinder(d = screw_head_d, h = 1.6);
