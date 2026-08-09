@@ -51,6 +51,14 @@ screw_head_d = 6.2;    // lid countersink
 vent_slots   = true;   // side vents over the ESP32 half
 zip_slots    = true;   // zip-tie slots in the base for under-desk mounting
 
+/* ---------- mounting ears (screw to desk underside, floor against the desk) ---------- */
+ears         = true;
+ear_len      = 13.0;   // how far each ear sticks out past the end wall
+ear_w        = 16.0;   // ear width
+ear_th       = 4.0;    // ear thickness (= floor plane up)
+ear_hole_d   = 4.5;    // wood screw clearance
+ear_y_off    = 0.0;    // sideways offset from case centerline (dodge desk frame members)
+
 /* ---------- derived ---------- */
 in_l  = board_l + 2*clearance;
 in_w  = board_w + 2*clearance;
@@ -75,7 +83,24 @@ module screw_posts(hole_d, hole_depth) {
     }
 }
 
+module ear(dir) {  // dir: -1 = x=0 end, +1 = x=out_l end
+  hole_x = (dir < 0) ? -ear_len + ear_w/2 - 1 : out_l + ear_len - ear_w/2 + 1;
+  anchor_x = (dir < 0) ? 0.5 : out_l - 0.5;
+  difference() {
+    hull() {
+      translate([hole_x, out_w/2 + ear_y_off, 0]) cylinder(d = ear_w, h = ear_th);
+      translate([anchor_x - 0.5, out_w/2 + ear_y_off - ear_w/2, 0])
+        cube([1, ear_w, ear_th]);
+    }
+    translate([hole_x, out_w/2 + ear_y_off, -eps]) cylinder(d = ear_hole_d, h = ear_th + 2*eps);
+  }
+}
+
 module base() {
+  if (ears) {
+    ear(-1);
+    ear(1);
+  }
   difference() {
     union() {
       // shell
