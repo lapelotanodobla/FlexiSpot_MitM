@@ -17,7 +17,7 @@ board_l      = 132.5;  // perfboard length
 board_w      = 48.0;   // perfboard width
 board_th     = 1.6;    // perfboard thickness
 pins_below   = 5.0;    // clearance under board for solder pins/wires
-above_board  = 24.0;   // tallest thing above board top (29 total - ~5 below)
+above_board  = 30.0;   // headroom above board top — must clear the tall RJ45 support PCB
 
 /* ---------- case ---------- */
 wall         = 2.0;    // wall thickness
@@ -33,6 +33,12 @@ lid_mode     = "snap";  // "snap" (no fasteners) | "screw" (corner towers)
 snap_bead_d  = 1.6;    // rounded catch bead diameter on the skirt
 snap_depth   = 0.9;    // how deep the groove cuts into the base wall
 snap_gap     = 0.25;   // skirt-to-wall running clearance (matches skirt offset)
+
+// Segmented skirt: the lip only exists at the USB end and the two long-wall
+// centers (which carry the snaps). The RJ45 end has NO skirt — the jacks
+// through their lid holes locate that end, so nothing crowds them there.
+skirt_end_len = 18.0;  // skirt depth region at the USB end (x from 0)
+skirt_center  = 46.0;  // center segment length on the long walls
 
 /* ---------- USB opening (end wall at x=0) ---------- */
 usb_w        = 13.0;   // opening width
@@ -94,8 +100,8 @@ module corner_towers() {
 // Snap geometry, symmetric about both centerlines so the lid's 180° flip
 // still lines the beads up with the grooves. bead center height (installed):
 snap_z    = base_h - lip_h + 2;
-snap_x0   = wall + 12;
-snap_len  = out_l - 2*(wall + 12);
+snap_len  = skirt_center - 10;          // sits within the center skirt segment
+snap_x0   = out_l/2 - snap_len/2;
 
 module base_snap_grooves() {  // cut into the two long walls' inner faces
   for (yy = [[wall - snap_depth, wall + eps],
@@ -172,12 +178,21 @@ module lid() {
       // corner discs covering the base's external towers (screw mode only)
       if (lid_mode == "screw")
         for (p = corner_pts) translate([p[0], p[1], 0]) cylinder(d = tower_d, h = lid_th);
-      // skirt that drops inside the base walls (overlaps plate for clean union)
-      difference() {
-        translate([wall + 0.25, wall + 0.25, lid_th - 0.1])
-          cube([in_l - 0.5, in_w - 0.5, lip_h + 0.1]);
-        translate([wall + 0.25 + 1.6, wall + 0.25 + 1.6, lid_th - 0.2])
-          cube([in_l - 0.5 - 3.2, in_w - 0.5 - 3.2, lip_h + 0.4]);
+      // Segmented skirt: thin ring intersected with the keep-zones (USB end +
+      // long-wall centers). No skirt at the RJ45 end — jacks locate it there.
+      intersection() {
+        difference() {
+          translate([wall + 0.25, wall + 0.25, lid_th - 0.1])
+            cube([in_l - 0.5, in_w - 0.5, lip_h + 0.1]);
+          translate([wall + 0.25 + 1.6, wall + 0.25 + 1.6, lid_th - 0.2])
+            cube([in_l - 0.5 - 3.2, in_w - 0.5 - 3.2, lip_h + 0.4]);
+        }
+        union() {
+          translate([-1, -1, lid_th - 1])                       // USB end
+            cube([skirt_end_len + 1, out_w + 2, lip_h + 3]);
+          translate([out_l/2 - skirt_center/2, -1, lid_th - 1]) // long-wall centers
+            cube([skirt_center, out_w + 2, lip_h + 3]);
+        }
       }
       if (lid_mode == "snap") lid_snap_beads();
     }
